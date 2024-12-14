@@ -50,7 +50,30 @@ wss.on("connection", async function connection(socket: UserWebSocket, req) {
     });
 
     socket.on("close",async function onClose(){
-      
+      try {
+        const userId = socket.userId
+        if(!userId){throw new Error("user have no id")}
+        const keys = await client?.keys(`game:*`)
+        if(!keys){throw new Error("There's No Game Available")}
+        for(const key of keys){
+          const gameId = key.split(":")[1]
+          const gameString = await client?.get(key)
+          const game = gameString? JSON.parse(gameString) :null
+          const playerIndex = game.players.findIndex((player:Player)=> player.playerId === userId)
+          if(playerIndex!=-1){
+            game.players.splice(playerIndex,1)
+            await client?.set(key,JSON.stringify(game))
+            broadcast({
+              type:"player_disconnect",
+              gameId:gameId,
+              name:game.players[playerIndex].name            
+            },{socket,userId,redisClient:client})
+            break
+          }          
+        }
+      } catch (err:any){
+        socket.send(err.message)
+      }
     })
 
     socket.on("message", async function event(data: any) {
@@ -102,9 +125,10 @@ export async function broadcast(
       game.players.map((player: Player) => player.playerId)
     );
     const playerNameList = {
-      type: "bulk",
+      type: "all",
       players: game.players.map((player: Player) => ({
         name: player.name,
+        voted:player.voted
       })),
     };
 
@@ -119,6 +143,12 @@ export async function broadcast(
           ) {
             client.send(JSON.stringify(data));
           }
+          if(client.readyState === WebSocket.OPEN &&
+            client.userId == userSocketInfo.userId &&
+            playerIds.has(client.userId) &&
+            client == userSocketInfo.socket){
+              client.send(JSON.stringify(playerNameList));
+            }
         }
         break;
       }
@@ -140,6 +170,18 @@ export async function broadcast(
           if (
             client.readyState === WebSocket.OPEN &&
             playerIds.has(client.userId)
+          ) {
+            client.send(JSON.stringify(data));
+          }
+        }
+        break;
+      }
+
+      case "player_disconnect":{
+        for (const client of wss.clients as Set<UserWebSocket>) {
+          if (
+            client.readyState === WebSocket.OPEN &&
+            playerIds.has(client.userId)&& client.userId != userSocketInfo.userId && client!=userSocketInfo.socket
           ) {
             client.send(JSON.stringify(data));
           }

@@ -37,12 +37,14 @@ export const joinGame = async ({ parsedData, socket, client }: Args) => {
         playerId: userId,
         name: parsedData.name,
         number: "0",
+        voted:false
       });
       await client?.set(`gameId:${gameID}`, JSON.stringify(game));
       broadcast(
         {
           type: "join",
           name: parsedData.name,
+          voted:false,
           gameId: gameID,
         },
         { socket, userId, redisClient: client }
@@ -102,7 +104,7 @@ export const revealCards = async ({ parsedData, socket, client }: Args) => {
         socket.send("unAuthorized");
       }
       const revealedCards = game.players.map((p: Player) => ({
-        playerName: p.name,
+        name: p.name,
         number: p.number,
         voted:p.voted
       }));
@@ -125,11 +127,11 @@ export const revealCards = async ({ parsedData, socket, client }: Args) => {
 
 export const getAll = async ({socket, client , parsedData }: Args)=>{
    try {
-    
       const gameString = await client.get(`gameId:${parsedData.gameId}`)
       const gamePlayers = JSON.parse(gameString)
       const allPlayers = gamePlayers.players.map((p:Player)=>({
-        name:p.name
+        name:p.name,
+        voted:p.voted,
       }))
       const data:responseDataType= {
         type:"all",
