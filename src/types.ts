@@ -6,13 +6,9 @@ export interface UserWebSocket extends WebSocket {
 
 export interface Data {
   type:string,
-  userId:string,
-  name:string,
-  number?:string,
-  gameId?:string|undefined,
-  cards?:Array<Pick<Player,"name"|"number">>
-  players?:Array<Pick<Player,"name">>,
-  voted?:boolean
+  message:Partial<{players:Array<Player>,
+    organizerId:string,
+    reveal:boolean,gameId:string,userId:string,name:string,number:string}>
 }
 
 
@@ -31,5 +27,5 @@ export interface Player {
   playerId:string,
   number:string,
   name:string,
-  voted?:boolean
+  voted:boolean
 }

@@ -28,26 +28,23 @@ interface Args {
 
 export const joinGame = async ({ parsedData, socket, client }: Args) => {
   try {
-    const gameID = parsedData.gameId;
-    const userId = parsedData.userId;
+    const gameID = parsedData.message.gameId;
+    const userId = parsedData.message.userId;
     const gameString = await client?.get(`gameId:${gameID}`);
     const game = gameString ? JSON.parse(gameString) : null;
     if (game.players) {
       game.players.push({
         playerId: userId,
-        name: parsedData.name,
+        name: parsedData.message.name,
         number: "0",
-        voted:false
+        voted: false,
       });
       await client?.set(`gameId:${gameID}`, JSON.stringify(game));
       broadcast(
         {
-          type: "join",
-          name: parsedData.name,
-          voted:false,
-          gameId: gameID,
-        },
-        { socket, userId, redisClient: client }
+          type: "game",
+          message: game,
+        }
       );
     } else {
       socket.send("invalid GameID");
@@ -57,10 +54,10 @@ export const joinGame = async ({ parsedData, socket, client }: Args) => {
   }
 };
 
-export const selectedNumber = async ({ parsedData, socket, client }: Args) => {
+export const voted = async ({ parsedData, socket, client }: Args) => {
   try {
-    const gameID = parsedData.gameId;
-    const userId = parsedData.userId;
+    const gameID = parsedData.message.gameId;
+    const userId = parsedData.message.userId;
     const gameString = await client?.get(`gameId:${gameID}`);
     const game = gameString ? JSON.parse(gameString) : null;
     if (game.players) {
@@ -70,17 +67,14 @@ export const selectedNumber = async ({ parsedData, socket, client }: Args) => {
       if (!playerIdIndex) {
         socket.send("unAuthorized");
       }
-      game.players[playerIdIndex].number = parsedData.number;
+      game.players[playerIdIndex].number = parsedData.message.number;
       game.players[playerIdIndex].voted = true;
       await client?.set(`gameId:${gameID}`, JSON.stringify(game));
       broadcast(
         {
-          type: "selected",
-          name: parsedData.name,
-          voted:true,
-          gameId: gameID,
-        },
-        { socket, userId, redisClient: client }
+          type: "game",
+          message: game,
+        }
       );
     } else {
       socket.send("invalid GameID");
@@ -90,55 +84,22 @@ export const selectedNumber = async ({ parsedData, socket, client }: Args) => {
   }
 };
 
-export const revealCards = async ({ parsedData, socket, client }: Args) => {
+export const reveal = async ({ parsedData, socket, client }: Args) => {
   try {
-    const gameID = parsedData.gameId;
-    const userId = parsedData.userId;
+    const gameID = parsedData.message.gameId;
+    const userId = parsedData.message.userId;
     const gameString = await client?.get(`gameId:${gameID}`);
     const game = gameString ? JSON.parse(gameString) : null;
-    if (game.players) {
-      const playerIdIndex = game.players.findIndex(
-        (p: Player) => p.playerId === userId
-      );
-      if (playerIdIndex<0) {
-        socket.send("unAuthorized");
+    if (game.organizerId != userId) return;
+    game.reveal = true;
+
+    broadcast(
+      {
+        type: "game",
+        message: game,
       }
-      const revealedCards = game.players.map((p: Player) => ({
-        name: p.name,
-        number: p.number,
-        voted:p.voted
-      }));
-      broadcast(
-        {
-          type: "reveal",
-          name: parsedData.name,
-          gameId: gameID,
-          cards: revealedCards,
-        },
-        { socket, userId, redisClient: client }
-      );
-    } else {
-      socket.send("invalid GameID");
-    }
+    );
   } catch (err: any) {
     throw err;
   }
 };
-
-export const getAll = async ({socket, client , parsedData }: Args)=>{
-   try {
-      const gameString = await client.get(`gameId:${parsedData.gameId}`)
-      const gamePlayers = JSON.parse(gameString)
-      const allPlayers = gamePlayers.players.map((p:Player)=>({
-        name:p.name,
-        voted:p.voted,
-      }))
-      const data:responseDataType= {
-        type:"all",
-        players:allPlayers
-      }
-      socket.send(JSON.stringify(data))
-   } catch (err:any){
-    throw err;
-   }
-}
